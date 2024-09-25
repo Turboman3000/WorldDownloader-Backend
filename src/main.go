@@ -2,67 +2,82 @@ package main
 
 import (
 	"context"
-	"log"
 	"math/rand"
 	"os"
+	"path"
 
 	"github.com/goccy/go-json"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
-	"github.com/joho/godotenv"
-
-	"github.com/minio/minio-go/v7"
-	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
+var ctx = context.Background()
+
 func main() {
-	ctx := context.Background()
-	err := godotenv.Load(".env")
-
-	if err != nil {
-		log.Fatalln(err)
-	}
-
-	s3Client, err := minio.New(os.Getenv("EU_S3_URL"), &minio.Options{
-		Creds:  credentials.NewStaticV4(os.Getenv("S3_ACCESS_TOKEN"), os.Getenv("S3_SECRET_TOKEN"), ""),
-		Region: "auto",
-		Secure: true,
-	})
-
-	if err != nil {
-		log.Fatalln(err)
-	}
-
 	app := fiber.New(fiber.Config{
 		JSONEncoder:   json.Marshal,
 		JSONDecoder:   json.Unmarshal,
 		ServerHeader:  "WDL-Backend",
+		BodyLimit:     5 * 1024 * 1024 * 1024 * 1024,
 		CaseSensitive: true,
 		AppName:       "WorldDownloader Backend",
 	})
 	app.Use(cors.New())
 
-	app.Post("/api/v1/upload", func(c *fiber.Ctx) error {
+	app.Get("/api/v1/status", func(c *fiber.Ctx) error {
 		c.Response().Header.Add("Content-Type", "application/json")
+		return c.SendString(`{"status":"ok","code":200}`)
+	})
 
+	app.Post("/api/v1/upload", func(c *fiber.Ctx) error {
 		var id = generateID()
 
+		//name := c.FormValue("name")
+
+		file, err := c.FormFile("file")
+
+		if err != nil {
+			panic(err)
+		}
+
+		fileContent, err := file.Open()
+
+		if err != nil {
+			panic(err)
+		}
+
+		fileData := make([]byte, file.Size)
+		fileContent.Read(fileData)
+
+		os.WriteFile(path.Join("./worlds/"+id+".zip"), fileData, os.ModeAppend)
+
+		c.Response().Header.Add("Content-Type", "application/json")
 		return c.SendString(`{"status":"ok","code":200,"id":"` + id + `"}`)
 	})
 
 	app.Get("/api/v1/download", func(c *fiber.Ctx) error {
-		c.Response().Header.Add("Content-Type", "application/json")
-		return c.SendString("{}")
+		var code = c.Query("c")
+
+		_, err := os.OpenFile("./worlds/"+code+".zip", os.O_RDONLY, 0644)
+
+		if err != nil {
+			c.Response().Header.Add("Content-Type", "application/json")
+			return c.SendString(`{"status":"Not Found","code":404}`)
+		}
+
+		c.Response().Header.Add("Content-Type", "application/zip")
+		c.Response().Header.Add("Content-Disposition", `attachment; filename="`+code+`.zip"`)
+		return c.SendFile("./worlds/"+code+".zip", true)
 	})
 
-	app.Listen(":8080")
+	app.Listen("0.0.0.0:8080")
 }
 
 func generateID() string {
 	var id = ""
 	var chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ123456789"
 
-	for i := 0; i < 12; i++ {
+	for i := 0; i < 15; i++ {
 		id += string(chars[rand.Intn(len(chars))])
 	}
 

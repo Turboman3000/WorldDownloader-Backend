@@ -73,6 +73,15 @@ func main() {
 	app.Get("/api/v1/download", func(c *fiber.Ctx) error {
 		var code = c.Query("c")
 
+		var name = ""
+
+		for _, world := range worlds {
+			if world.ID == code {
+				name = world.Name
+				break
+			}
+		}
+
 		_, err := os.OpenFile("./worlds/"+code+".zip", os.O_RDONLY, 0644)
 
 		if err != nil {
@@ -81,7 +90,7 @@ func main() {
 		}
 
 		c.Response().Header.Add("Content-Type", "application/zip")
-		c.Response().Header.Add("Content-Disposition", `attachment; filename="`+code+`.zip"`)
+		c.Response().Header.Add("Content-Disposition", `attachment; filename="`+name+`.zip"`)
 		return c.SendFile("./worlds/"+code+".zip", true)
 	})
 

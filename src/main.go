@@ -1,17 +1,18 @@
 package main
 
 import (
-	"context"
 	"math/rand"
 	"os"
 	"path"
+	"slices"
+	"time"
 
 	"github.com/goccy/go-json"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 )
 
-var ctx = context.Background()
+var worlds []IWorld
 
 func main() {
 	app := fiber.New(fiber.Config{
@@ -32,7 +33,7 @@ func main() {
 	app.Post("/api/v1/upload", func(c *fiber.Ctx) error {
 		var id = generateID()
 
-		//name := c.FormValue("name")
+		name := c.FormValue("name")
 
 		file, err := c.FormFile("file")
 
@@ -49,7 +50,19 @@ func main() {
 		fileData := make([]byte, file.Size)
 		fileContent.Read(fileData)
 
-		os.WriteFile(path.Join("./worlds/"+id+".zip"), fileData, os.ModeAppend)
+		err = os.WriteFile(path.Join("./worlds/"+id+".zip"), fileData, os.ModeAppend)
+
+		if err != nil {
+			panic(err)
+		}
+
+		var world = IWorld{
+			ID:      id,
+			Name:    name,
+			Expires: time.Now().Add(time.Hour).Unix(),
+		}
+
+		go removeWorld(world)
 
 		c.Response().Header.Add("Content-Type", "application/json")
 		return c.SendString(`{"status":"ok","code":200,"id":"` + id + `"}`)
@@ -82,4 +95,23 @@ func generateID() string {
 	}
 
 	return id
+}
+
+func removeWorld(world IWorld) {
+	worlds = append(worlds, world)
+	time.Sleep(time.Duration(world.Expires-time.Now().Unix()) * time.Second)
+
+	os.Remove("./worlds/" + world.ID + ".zip")
+	worlds = removeSplice(worlds, world)
+}
+
+type IWorld struct {
+	ID      string
+	Name    string
+	Expires int64
+}
+
+func removeSplice(s []IWorld, i IWorld) []IWorld {
+	s[slices.Index(worlds, i)] = s[len(s)-1]
+	return s[:len(s)-1]
 }

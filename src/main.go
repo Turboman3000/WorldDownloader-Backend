@@ -15,6 +15,8 @@ import (
 var worlds []IWorld
 
 func main() {
+	os.Mkdir("./worlds", os.ModePerm)
+
 	app := fiber.New(fiber.Config{
 		JSONEncoder:   json.Marshal,
 		JSONDecoder:   json.Unmarshal,

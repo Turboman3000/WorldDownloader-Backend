@@ -59,7 +59,7 @@ func main() {
 		var world = IWorld{
 			ID:      id,
 			Name:    name,
-			Expires: time.Now().Add(time.Hour).Unix(),
+			Expires: time.Now().Add(time.Minute * 30).Unix(),
 		}
 
 		go removeWorld(world)

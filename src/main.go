@@ -19,6 +19,8 @@ import (
 var worlds []IWorld
 
 func main() {
+	println(os.Getenv("CLAMAV_HOST"))
+
 	apiClient := resty.New()
 
 	os.RemoveAll("./worlds")

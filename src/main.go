@@ -63,7 +63,7 @@ func main() {
 
 		fileData := make([]byte, file.Size)
 
-		resp, err := apiClient.R().SetFileReader("profile_img", "test-img.png", bytes.NewReader(fileData)).Post("http://eu1.blueservers.de:9000/scan")
+		resp, err := apiClient.R().SetFileReader("profile_img", "test-img.png", bytes.NewReader(fileData)).Post("http://" + os.Getenv("CLAMAV_HOST") + "/scan")
 
 		if err != nil {
 			panic(err)

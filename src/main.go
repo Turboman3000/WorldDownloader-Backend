@@ -1,20 +1,27 @@
 package main
 
 import (
+	"bytes"
 	"math/rand"
 	"os"
 	"path"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/goccy/go-json"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
+
+	"github.com/go-resty/resty/v2"
 )
 
 var worlds []IWorld
 
 func main() {
+	apiClient := resty.New()
+
+	os.RemoveAll("./worlds")
 	os.Mkdir("./worlds", os.ModePerm)
 
 	app := fiber.New(fiber.Config{
@@ -33,7 +40,7 @@ func main() {
 	})
 
 	app.Post("/api/v1/upload", func(c *fiber.Ctx) error {
-		var id = generateID()
+		c.Response().Header.Add("Content-Type", "application/json")
 
 		name := c.FormValue("name")
 
@@ -43,6 +50,11 @@ func main() {
 			panic(err)
 		}
 
+		if !strings.HasSuffix(file.Filename, ".zip") {
+			return c.SendString(`{"status":"Invalid File","code":400}`)
+		}
+
+		var id = generateID()
 		fileContent, err := file.Open()
 
 		if err != nil {
@@ -50,6 +62,20 @@ func main() {
 		}
 
 		fileData := make([]byte, file.Size)
+
+		resp, err := apiClient.R().SetFileReader("profile_img", "test-img.png", bytes.NewReader(fileData)).Post("http://eu1.blueservers.de:9000/scan")
+
+		if err != nil {
+			panic(err)
+		}
+
+		var jsonMap ClamAVResp
+		json.Unmarshal(resp.Body(), &jsonMap)
+
+		if jsonMap.Status == "FOUND" {
+			return c.SendString(`{"status":"Malicious File","code":400}`)
+		}
+
 		fileContent.Read(fileData)
 
 		err = os.WriteFile(path.Join("./worlds/"+id+".zip"), fileData, os.ModeAppend)
@@ -66,7 +92,6 @@ func main() {
 
 		go removeWorld(world)
 
-		c.Response().Header.Add("Content-Type", "application/json")
 		return c.SendString(`{"status":"ok","code":200,"id":"` + id + `"}`)
 	})
 
@@ -120,6 +145,11 @@ type IWorld struct {
 	ID      string
 	Name    string
 	Expires int64
+}
+
+type ClamAVResp struct {
+	Status      string `json:"Status"`
+	Description string `json:"Description"`
 }
 
 func removeSplice(s []IWorld, i IWorld) []IWorld {

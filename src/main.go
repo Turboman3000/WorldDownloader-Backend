@@ -12,6 +12,7 @@ import (
 	"github.com/goccy/go-json"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/joho/godotenv"
 
 	"github.com/go-resty/resty/v2"
 )
@@ -19,6 +20,12 @@ import (
 var worlds []IWorld
 
 func main() {
+	err := godotenv.Load()
+
+	if err != nil {
+		panic(err)
+	}
+
 	println(os.Getenv("CLAMAV_HOST"))
 
 	apiClient := resty.New()

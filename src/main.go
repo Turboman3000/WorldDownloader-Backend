@@ -19,6 +19,7 @@ import (
 )
 
 var worlds []IWorld
+var iips []IIP
 
 func main() {
 	err := godotenv.Load()
@@ -50,6 +51,41 @@ func main() {
 	app.Post("/api/v1/upload", func(c *fiber.Ctx) error {
 		c.Response().Header.Add("Content-Type", "application/json")
 
+		var alreadyIP = false
+
+		for i, ip := range iips {
+			if ip.IP != c.IP() {
+				continue
+			}
+
+			var newARRAY []IIP = iips
+
+			if ip.Expires <= time.Now().Unix() {
+				newARRAY = slices.Delete(newARRAY, slices.IndexFunc(newARRAY, func(item IIP) bool {
+					return item.IP == ip.IP
+				}), 1)
+			}
+
+			if ip.TimesUsed >= 5 {
+				c.Status(429)
+				return c.SendString(`{"status":"Rate Limited","code":429}`)
+			} else {
+				newARRAY[i].TimesUsed += 1
+			}
+
+			iips = newARRAY
+
+			alreadyIP = true
+		}
+
+		if !alreadyIP {
+			iips = append(iips, IIP{
+				IP:        c.IP(),
+				TimesUsed: 1,
+				Expires:   time.Now().Add(time.Hour * 6).Unix(),
+			})
+		}
+
 		name := c.FormValue("name")
 
 		file, err := c.FormFile("file")
@@ -59,6 +95,7 @@ func main() {
 		}
 
 		if !strings.HasSuffix(file.Filename, ".zip") {
+			c.Status(400)
 			return c.SendString(`{"status":"Invalid File","code":400}`)
 		}
 
@@ -81,6 +118,7 @@ func main() {
 		json.Unmarshal(resp.Body(), &jsonMap)
 
 		if jsonMap.Status == "FOUND" {
+			c.Status(400)
 			return c.SendString(`{"status":"Malicious File","code":400}`)
 		}
 
@@ -93,6 +131,7 @@ func main() {
 		}
 
 		if !testFiles(zipCont.File) {
+			c.Status(400)
 			return c.SendString(`{"status":"Invalid File","code":400}`)
 		}
 
@@ -157,6 +196,12 @@ func removeWorld(world IWorld) {
 
 	os.Remove("./worlds/" + world.ID + ".zip")
 	worlds = removeSplice(worlds, world)
+}
+
+type IIP struct {
+	IP        string
+	Expires   int64
+	TimesUsed int32
 }
 
 type IWorld struct {

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"archive/zip"
 	"bytes"
 	"math/rand"
 	"os"
@@ -25,8 +26,6 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-
-	println(os.Getenv("CLAMAV_HOST"))
 
 	apiClient := resty.New()
 
@@ -86,6 +85,16 @@ func main() {
 		}
 
 		fileContent.Read(fileData)
+
+		zipCont, err := zip.NewReader(fileContent, file.Size)
+
+		if err != nil {
+			panic(err)
+		}
+
+		if !testFiles(zipCont.File) {
+			return c.SendString(`{"status":"Invalid File","code":400}`)
+		}
 
 		err = os.WriteFile(path.Join("./worlds/"+id+".zip"), fileData, os.ModeAppend)
 
@@ -164,4 +173,33 @@ type ClamAVResp struct {
 func removeSplice(s []IWorld, i IWorld) []IWorld {
 	s[slices.Index(worlds, i)] = s[len(s)-1]
 	return s[:len(s)-1]
+}
+
+func testFiles(files []*zip.File) bool {
+	var haveRegions = false
+	var haveLevel = false
+
+	var regionCheckDone = false
+	var levelCheckDone = false
+
+	for _, file := range files {
+		path := strings.Split(file.Name, "/")
+		endings := strings.Split(file.Name, ".")
+
+		if haveLevel && haveRegions {
+			break
+		}
+
+		if !regionCheckDone && path[1] == "region" && endings[len(endings)-1] == "mca" {
+			haveRegions = true
+			regionCheckDone = true
+		}
+
+		if !levelCheckDone && path[1] == "level.dat" {
+			haveLevel = true
+			levelCheckDone = true
+		}
+	}
+
+	return haveRegions && haveLevel
 }
